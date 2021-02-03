@@ -1,3 +1,5 @@
+// Command exectty is a dummy command that starts '/bin/bash' on a new terminal.
+// If there is no terminal, it doesn't do anything.
 package main
 
 import (
@@ -13,8 +15,8 @@ func main() {
 }
 
 func run() int {
-	fd, TERM, resize, cleanup := term.GetStdTerminal()
-	if fd == nil {
+	fd, TERM, resize, cleanup, err := term.GetStdTerminal()
+	if err != nil || fd == nil {
 		panic("Std: Not a terminal")
 	}
 	defer cleanup()
@@ -32,6 +34,7 @@ func run() int {
 	if err := cmd.StartPty(fd.File(), TERM, resize); err != nil {
 		panic(err)
 	}
+	defer cmd.Cleanup()
 
 	code, err := cmd.Wait()
 	if err != nil {

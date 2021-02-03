@@ -29,10 +29,10 @@ type StreamingProcess struct {
 	// for result handling
 	outputErrChan chan error
 	inputDoneChan chan struct{}
-	restoreTerms  sync.Once
+	restoreOnce   sync.Once
 
-	// for cleanup
-	exited bool
+	// detach from the terminal once
+	detachOnce sync.Once
 }
 
 // StreamingProcess implements the Process interface
@@ -150,7 +150,7 @@ func (sp *StreamingProcess) setRawTerminals() error {
 
 // restoreTerminals restores all the terminal modes
 func (sp *StreamingProcess) restoreTerminals() {
-	sp.restoreTerms.Do(func() {
+	sp.restoreOnce.Do(func() {
 		sp.stdoutTerm.RestoreInput()
 		sp.stderrTerm.RestoreInput()
 		sp.stdinTerm.RestoreOutput()
@@ -240,21 +240,27 @@ func (sp *StreamingProcess) Wait() (code int, err error) {
 	}
 
 	// and fetch the result
-	code, err = sp.Streamer.Result(sp.ctx)
-	if err != nil {
-		sp.exited = true
-	}
+	return sp.Streamer.Result(sp.ctx)
+}
+
+// Stop stops the streaming process
+func (sp *StreamingProcess) Stop() (err error) {
+	sp.detachOnce.Do(func() {
+		err = sp.Streamer.Detach(sp.ctx)
+	})
 	return
 }
 
 // Cleanup cleans up this process, typically to kill it.
-func (sp *StreamingProcess) Cleanup() (killed bool) {
+func (sp *StreamingProcess) Cleanup() error {
+	err1 := sp.Stop()          // detach
+	err2 := sp.ptyTerm.Close() // and close the pty
 
-	if sp.ptyTerm != nil {
-		sp.ptyTerm.Close()
-		sp.Streamer.Detach(sp.ctx)
-		sp.ptyTerm = nil
+	if err1 != nil {
+		return err1
 	}
-
-	return sp.exited // return if we exited
+	if err2 != nil {
+		return err2
+	}
+	return nil
 }

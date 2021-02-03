@@ -81,7 +81,7 @@ func (sp *ExecProcess) Start(Term string, resizeChan <-chan term.WindowSize, isP
 	sp.cmd.Env = append(sp.cmd.Env, fmt.Sprintf("TERM=%s", Term))
 
 	// start the pty
-	t, err := term.ExecPty(sp.cmd)
+	t, err := term.ExecTerminal(sp.cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -116,21 +116,24 @@ func (sp *ExecProcess) Wait() (code int, err error) {
 	return code, nil
 }
 
-// Cleanup cleans up this process, typically killing it
-func (sp *ExecProcess) Cleanup() (killed bool) {
-	// no process => return
-	if sp.cmd.Process == nil {
-		return true
-	}
+var errExecStopFailure = errors.New("ExecProcess: Failed to kill process")
 
+// Stop is used to stop a running process.
+func (sp *ExecProcess) Stop() (err error) {
 	// silence any panic()ing errors, but return false!
 	defer func() {
-		recover()
+		if err == nil {
+			recover()
+			err = errExecStopFailure
+		}
 	}()
 
 	// kill the process, and prevent further attempts
-	if sp.cmd.Process.Kill() == nil {
-		sp.cmd.Process = nil
-	}
-	return true
+	return sp.cmd.Process.Kill()
+}
+
+// Cleanup cleans up this process, typically killing it
+func (sp *ExecProcess) Cleanup() error {
+	sp.cmd.Process = nil // remove the process object
+	return nil
 }
