@@ -19,7 +19,8 @@ type Command struct {
 
 	state commandState // the current state of the underlying process.
 
-	isPty bool // did the call to init() set up a tty
+	isPty bool // did the call to init() set up a tty?
+	pty   *term.Terminal
 
 	waitChan     chan struct{} // closed when waiting is done
 	waitExitCode int           // exit code from wait
@@ -42,6 +43,8 @@ const (
 var errCommandAlreadyInitialized = errors.New("Command: Already initialized")
 
 // Init initializes the underlying process by providing it with an appropriate context.
+// When context is nil, a new background context is initialized.
+//
 // Once the context is closed, the command will be killed.
 //
 // Init must be called once.
@@ -51,6 +54,10 @@ func (e *Command) Init(ctx context.Context, isTty bool) error {
 
 	if e.state != commandStateDefault { // command already initialized
 		return errCommandAlreadyInitialized
+	}
+
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
 	if err := e.Process.Init(ctx, isTty); err != nil {
@@ -156,10 +163,11 @@ func (e *Command) StartPty(tm io.ReadWriter, TERM string, resizeChan <-chan term
 	if err != nil {
 		return err
 	}
+	e.pty = f
 
 	// start copying both ways and close when done.
-	go io.Copy(tm, f)
-	go io.Copy(f, tm)
+	go io.Copy(tm, f.File())
+	go io.Copy(f.File(), tm)
 
 	return nil
 }
@@ -237,6 +245,7 @@ func (e *Command) Cleanup() error {
 	}
 
 	e.cleanupOnce.Do(func() {
+		e.pty.Close() // close the terminal; this also works if terminal is nil.
 		e.cleanupErr = e.Process.Cleanup()
 	})
 	return e.cleanupErr

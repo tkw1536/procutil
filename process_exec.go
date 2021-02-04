@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"strings"
 
@@ -71,7 +70,7 @@ func (sp *ExecProcess) Stdin() (io.WriteCloser, error) {
 }
 
 // Start starts this process
-func (sp *ExecProcess) Start(Term string, resizeChan <-chan term.WindowSize, isPty bool) (*os.File, error) {
+func (sp *ExecProcess) Start(Term string, resizeChan <-chan term.WindowSize, isPty bool) (*term.Terminal, error) {
 	// not a pty => start the process and be done!
 	if !isPty {
 		return nil, sp.cmd.Start()
@@ -94,7 +93,7 @@ func (sp *ExecProcess) Start(Term string, resizeChan <-chan term.WindowSize, isP
 	}()
 
 	// and return a function for this
-	return t.File(), nil
+	return t, nil
 }
 
 // Wait waits for the process and returns the exit code

@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/tkw1536/procutil/term"
 )
@@ -29,12 +28,15 @@ type Process interface {
 	// Stdin returns the standard input of this process.
 	Stdin() (io.WriteCloser, error)
 
-	// Start starts this process and returns a pointer to the pty terminal.
+	// Start starts this process and (if started on a pty) returns the appropriate terminal instance.
+	//
 	// Term is the name of tty to run this on. It is typically stored in the 'TERM' env variable.
 	// resizeChan is a channel that will resize a WindowSize object everytime the tty is resized.
-	// when isPty is true, resizeChan is guaranteed to not be nil.
 	// isPty indiccates if the process should be started on a pty. When it is false, Term and resizeChan will be zeroed.
-	Start(Term string, resizeChan <-chan term.WindowSize, isPty bool) (*os.File, error)
+	// when isPty is true, resizeChan is guaranteed to not be nil.
+	//
+	// The returned terminal, if any, should be closed by the caller and does not need to be manually cleaned up.
+	Start(Term string, resizeChan <-chan term.WindowSize, isPty bool) (*term.Terminal, error)
 
 	// Stop is used to stop a process that is betweeen the start and wait phases.
 	Stop() error

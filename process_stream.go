@@ -163,7 +163,7 @@ func (sp *StreamingProcess) restoreTerminals() {
 }
 
 // Start starts this process
-func (sp *StreamingProcess) Start(Term string, resizeChan <-chan term.WindowSize, isPty bool) (*os.File, error) {
+func (sp *StreamingProcess) Start(Term string, resizeChan <-chan term.WindowSize, isPty bool) (*term.Terminal, error) {
 	if err := sp.Streamer.Init(sp.ctx, Term, isPty); err != nil {
 		return nil, err
 	}
@@ -187,7 +187,7 @@ func (sp *StreamingProcess) Start(Term string, resizeChan <-chan term.WindowSize
 	}
 
 	// and return
-	return sp.ptyTerm.File(), nil
+	return sp.ptyTerm, nil
 }
 
 func (sp *StreamingProcess) execAndStream(isPty bool) error {
@@ -253,14 +253,5 @@ func (sp *StreamingProcess) Stop() (err error) {
 
 // Cleanup cleans up this process, typically to kill it.
 func (sp *StreamingProcess) Cleanup() error {
-	err1 := sp.Stop()          // detach
-	err2 := sp.ptyTerm.Close() // and close the pty
-
-	if err1 != nil {
-		return err1
-	}
-	if err2 != nil {
-		return err2
-	}
-	return nil
+	return sp.Stop()
 }
