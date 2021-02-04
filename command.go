@@ -74,6 +74,7 @@ var errCommandNotInitialized = errors.New("Command: Not initialized")
 var errCommandIsATerminal = errors.New("Command: Is a Terminal")
 
 // Start starts the process and sends output to the provided streams.
+// Calls Close() on the provided streams when they are closed.
 //
 // Init() must be called before a call to Start().
 // If this is not the case, an error is returned.
@@ -132,12 +133,14 @@ var errCommandNotATerminal = errors.New("Command: Not a Terminal")
 
 // StartPty runs this process on the given terminal.
 //
+// Closes the Reader and Writer of tm using the semantics of DualCloser.
+//
 // Init() must be called before a call to StartPty().
 // If this is not the case, an error is returned.
 //
 // Start() and StartPty() may only be called once.
 // Subsequently calls will produce an error.
-func (e *Command) StartPty(tm io.ReadWriter, TERM string, resizeChan <-chan term.WindowSize) error {
+func (e *Command) StartPty(tm io.ReadWriteCloser, TERM string, resizeChan <-chan term.WindowSize) error {
 	e.m.Lock()
 	defer e.m.Unlock()
 
@@ -150,8 +153,7 @@ func (e *Command) StartPty(tm io.ReadWriter, TERM string, resizeChan <-chan term
 
 	e.state = commandStateStart
 
-	// protect against bad callers that pass resizeChan === nil.
-	// make a new closed channel.
+	// protect against callers that pass resizeChan === nil.
 	if resizeChan == nil {
 		c := make(chan term.WindowSize)
 		close(c)
@@ -166,8 +168,15 @@ func (e *Command) StartPty(tm io.ReadWriter, TERM string, resizeChan <-chan term
 	e.pty = f
 
 	// start copying both ways and close when done.
-	go io.Copy(tm, f.File())
-	go io.Copy(f.File(), tm)
+	tc := NewDualCloser(tm)
+	go func() {
+		defer tc.CloseWrite()
+		io.Copy(tm, f.File())
+	}()
+	go func() {
+		defer tc.Close()
+		io.Copy(f.File(), tm)
+	}()
 
 	return nil
 }
