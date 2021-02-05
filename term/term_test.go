@@ -4,7 +4,7 @@ package term
 import (
 	"io/ioutil"
 	"os"
-	"runtime"
+	"reflect"
 	"testing"
 )
 
@@ -12,11 +12,12 @@ import (
 func TestTerminal(t *testing.T) {
 	t.Run("nil non-terminal", func(t *testing.T) {
 		term := NewTerminal(nil)
-		if term != nil {
-			t.Error("NewTerminal(nil) didn't return nil")
+
+		if !reflect.DeepEqual(term, nilTerminal{}) {
+			t.Error("NewTerminal() did not return nilTerminal{}")
 		}
 
-		gotFile := term.File()
+		gotFile := term.ReadWriteCloser()
 		if gotFile != nil {
 			t.Error("File() did not return nil")
 		}
@@ -54,7 +55,7 @@ func TestTerminal(t *testing.T) {
 			t.Error("NewTerminal(file) returned nil")
 		}
 
-		gotFile := term.File()
+		gotFile := term.ReadWriteCloser()
 		if gotFile == nil {
 			t.Error("File() returned nil")
 		}
@@ -82,9 +83,10 @@ func TestTerminal(t *testing.T) {
 	})
 
 	t.Run("real terminal", func(t *testing.T) {
-		if runtime.GOOS == "windows" {
-			t.Skip("Real terminal not supported on windows")
+		if !PTYSupport {
+			t.Skip("OS not supported")
 		}
+
 		file, err := ioutil.TempFile("", "dummy")
 		if err != nil {
 			t.Fatal("TempFile failed to create")
@@ -97,7 +99,7 @@ func TestTerminal(t *testing.T) {
 		}
 		defer term.Close()
 
-		gotFile := term.File()
+		gotFile := term.ReadWriteCloser()
 		if gotFile == nil {
 			t.Error("File() did not return correct file")
 		}

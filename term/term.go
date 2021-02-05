@@ -3,14 +3,79 @@ package term
 
 import (
 	"errors"
-	"os"
+	"io"
 
 	"github.com/tkw1536/procutil/term/lowlevel"
 )
 
-// Terminal represents an interface to a file descriptor that is a terminal
-type Terminal struct {
-	file *os.File // file
+// Terminal represents an object that has an underlying read-writer that is potentially a tty.
+type Terminal interface {
+	// ReadWriteCloser returns the io.ReadWriteCloser corresponding to this terminal, if any.
+	ReadWriteCloser() io.ReadWriteCloser
+
+	// Close closes the underlying file descriptor, if any.
+	Close() error
+
+	// IsTerminal checks if the underlying file represents a terminal.
+	IsTerminal() bool
+
+	// SetRawInput sets the input mode of this terminal to raw mode.
+	// When t is not a terminal, returns nil.
+	SetRawInput() error
+
+	// RestoreInput restores the input mode of this terminal to what it was before the call to SetRawInput().
+	// When t is not a terminal, or no call to SetRawInput() was made, returns nil.
+	RestoreInput() error
+
+	// SetRawOutput sets the output mode of this terminal to raw mode.
+	// When t is not a terminal, returns nil.
+	SetRawOutput() error
+
+	// RestoreOutput restores the ouput mode of this terminal to what it was before the call to SetRawOutput().
+	// When t is not a terminal, or no call to SetRawOutput() was made, returns nil.
+	RestoreOutput() error
+
+	// GetSize returns the current size of this terminal.
+	// When t is not a terminal, returns ErrNotATerminal.
+	GetSize() (*WindowSize, error)
+
+	// ResizeTo resizes this terminal to the provided size.
+	// Errors are silently ignored.
+	//
+	// When t does not represent a terminal, returns ErrNotATerminal.
+	ResizeTo(size WindowSize) error
+}
+
+// ErrNotATerminal is returned when the underlying terminal is not a terminal
+var ErrNotATerminal = errors.New("Terminal: File() is not a terminal")
+
+// OpenTerminal opens a new terminal and it's corresponding pty.
+func OpenTerminal() (tty, pty Terminal, err error) {
+	tf, pf, err := lowlevel.OpenPty()
+	return NewTerminal(tf), NewTerminal(pf), err
+}
+
+// WindowSize represents the size of a terminal window.
+type WindowSize struct {
+	Height, Width lowlevel.Size
+}
+
+// NewTerminal returns a new terminal instance corresponding to file.
+// rwcloser may be nil.
+func NewTerminal(rwcloser io.ReadWriteCloser) Terminal {
+	if rwcloser == nil {
+		return nilTerminal{}
+	}
+	var t fileTerminal
+	t.rwcloser = rwcloser
+	t.fd, t.isTerminal = lowlevel.GetFdInfo(rwcloser)
+	return &t
+}
+
+// fileTerminal represents an interface to a file descriptor that is a terminal
+// It implements Terminal.
+type fileTerminal struct {
+	rwcloser io.ReadWriteCloser // file
 
 	// returned by llGetFdInfo
 	fd         lowlevel.FileDescriptor
@@ -20,67 +85,31 @@ type Terminal struct {
 	inState, outState *lowlevel.TerminalState
 }
 
-// WindowSize represents the size of a terminal window.
-type WindowSize struct {
-	Height, Width lowlevel.Size
+func (t *fileTerminal) ReadWriteCloser() io.ReadWriteCloser {
+	return t.rwcloser
 }
 
-// NewTerminal returns a new terminal instance corresponding to file.
-// When file is nil, returns nil.
-func NewTerminal(file *os.File) *Terminal {
-	if file == nil {
+func (t *fileTerminal) Close() error {
+	if t.rwcloser == nil {
 		return nil
 	}
-	var t Terminal
-	t.file = file
-	t.fd, t.isTerminal = lowlevel.GetFdInfo(file)
-	return &t
+	return t.rwcloser.Close()
 }
 
-// OpenTerminal opens a new terminal and it's corresponding pty.
-func OpenTerminal() (tty, pty *Terminal, err error) {
-	tf, pf, err := lowlevel.OpenPty()
-	return NewTerminal(tf), NewTerminal(pf), err
-}
-
-// File returns the os.File corresponding to this terminal, if any.
-func (t *Terminal) File() *os.File {
-	if t == nil {
-		return nil
-	}
-	return t.file
-}
-
-// Close closes the underlying file descriptor, if any.
-func (t *Terminal) Close() error {
-	if t == nil || t.file == nil {
-		return nil
-	}
-	return t.file.Close()
-}
-
-// IsTerminal checks if the underlying file represents a terminal.
-func (t *Terminal) IsTerminal() bool {
-	if t == nil {
-		return false
-	}
+func (t *fileTerminal) IsTerminal() bool {
 	return t.isTerminal
 }
 
-// SetRawInput sets the input mode of this terminal to raw mode.
-// When t is not a terminal, returns nil.
-func (t *Terminal) SetRawInput() (err error) {
-	if t == nil || !t.isTerminal || t.inState != nil {
+func (t *fileTerminal) SetRawInput() (err error) {
+	if !t.isTerminal || t.inState != nil {
 		return nil
 	}
 	t.inState, err = lowlevel.SetRawTerminal(t.fd)
 	return
 }
 
-// RestoreInput restores the input mode of this terminal to what it was before the call to SetRawInput().
-// When t is not a terminal, or no call to SetRawInput() was made, returns nil.
-func (t *Terminal) RestoreInput() error {
-	if t == nil || t.inState == nil {
+func (t *fileTerminal) RestoreInput() error {
+	if t.inState == nil {
 		return nil
 	}
 
@@ -88,20 +117,16 @@ func (t *Terminal) RestoreInput() error {
 	return lowlevel.ResetTerminal(t.fd, t.inState)
 }
 
-// SetRawOutput sets the output mode of this terminal to raw mode.
-// When t is not a terminal, returns nil.
-func (t *Terminal) SetRawOutput() (err error) {
-	if t == nil || !t.isTerminal || t.outState != nil {
+func (t *fileTerminal) SetRawOutput() (err error) {
+	if !t.isTerminal || t.outState != nil {
 		return nil
 	}
 	t.outState, err = lowlevel.SetRawTerminalOutput(t.fd)
 	return
 }
 
-// RestoreOutput restores the ouput mode of this terminal to what it was before the call to SetRawOutput().
-// When t is not a terminal, or no call to SetRawOutput() was made, returns nil.
-func (t *Terminal) RestoreOutput() error {
-	if t == nil || t.outState == nil {
+func (t *fileTerminal) RestoreOutput() error {
+	if t.outState == nil {
 		return nil
 	}
 
@@ -109,12 +134,7 @@ func (t *Terminal) RestoreOutput() error {
 	return lowlevel.ResetTerminal(t.fd, t.outState)
 }
 
-// ErrNotATerminal is returned when the underlying terminal is not a terminal
-var ErrNotATerminal = errors.New("Terminal: File() is not a terminal")
-
-// GetSize returns the current size of this terminal.
-// When t is not a terminal, returns an ErrNotATerminal.
-func (t *Terminal) GetSize() (*WindowSize, error) {
+func (t *fileTerminal) GetSize() (*WindowSize, error) {
 	if !t.IsTerminal() {
 		return nil, ErrNotATerminal
 	}
@@ -130,14 +150,23 @@ func (t *Terminal) GetSize() (*WindowSize, error) {
 	}, nil
 }
 
-// ResizeTo resizes this terminal to the provided size.
-// Errors are silently ignored.
-//
-// When t does not represent a terminal, returns ErrNotATerminal
-func (t *Terminal) ResizeTo(size WindowSize) error {
+func (t *fileTerminal) ResizeTo(size WindowSize) error {
 	if !t.IsTerminal() {
 		return ErrNotATerminal
 	}
 
 	return lowlevel.SetWinsize(t.fd, size.Height, size.Width)
 }
+
+// nilTerminal implements Terminal returns a negative result for every command
+type nilTerminal struct{}
+
+func (nilTerminal) ReadWriteCloser() io.ReadWriteCloser { return nil }
+func (nilTerminal) Close() error                        { return nil }
+func (nilTerminal) IsTerminal() bool                    { return false }
+func (nilTerminal) SetRawInput() error                  { return nil }
+func (nilTerminal) RestoreInput() error                 { return nil }
+func (nilTerminal) SetRawOutput() error                 { return nil }
+func (nilTerminal) RestoreOutput() error                { return nil }
+func (nilTerminal) GetSize() (*WindowSize, error)       { return nil, ErrNotATerminal }
+func (nilTerminal) ResizeTo(size WindowSize) error      { return ErrNotATerminal }

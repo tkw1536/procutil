@@ -7,7 +7,10 @@
 // Not all functions are supported on all operating systems.
 package lowlevel
 
-import "errors"
+import (
+	"errors"
+	"runtime"
+)
 
-// ErrWindowsUnsupported is returned by various functions on Windows to indicate that the function is not supported.
-var ErrWindowsUnsupported = errors.New("Windows is not supported")
+// ErrOSUnsupported is returned by various functions to indicate that the operating system is not supported.
+var ErrOSUnsupported = errors.New(runtime.GOOS + "not supported")

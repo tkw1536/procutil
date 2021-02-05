@@ -7,16 +7,19 @@ import (
 	"github.com/tkw1536/procutil/term/lowlevel"
 )
 
+// PTYSupport indicates if the current operating system supports OpenPty() and StartOnPty() methods
+const PTYSupport = lowlevel.PTYSupport
+
 // ExecTerminal starts c on a new pty.
 // The user should close pty when finished.
-func ExecTerminal(c *exec.Cmd) (pty *Terminal, err error) {
+func ExecTerminal(c *exec.Cmd) (pty Terminal, err error) {
 	fd, err := lowlevel.StartOnPty(c)
 	return NewTerminal(fd), err
 }
 
 // GetStdTerminal returns information about the terminal represented by os.Stdout and puts it's input and output in raw mode.
 // When os.Stdout is not a terminal, does nothing.
-func GetStdTerminal() (term *Terminal, TERM string, resizeChan <-chan WindowSize, cleanup func(), err error) {
+func GetStdTerminal() (term Terminal, TERM string, resizeChan <-chan WindowSize, cleanup func(), err error) {
 	term = NewTerminal(os.Stdout)
 	cleanup = func() {}
 	if !term.IsTerminal() { // if we didn't receive a terminal, exit
@@ -55,7 +58,7 @@ func GetStdTerminal() (term *Terminal, TERM string, resizeChan <-chan WindowSize
 	return
 }
 
-func monitorSize(term *Terminal) (ws <-chan WindowSize, cleanup func(), err error) {
+func monitorSize(term Terminal) (ws <-chan WindowSize, cleanup func(), err error) {
 	// send the window size every time we get a resize event
 	wsc := make(chan WindowSize, 1)
 	onResize, cleanup, err := lowlevel.WindowResize(true)

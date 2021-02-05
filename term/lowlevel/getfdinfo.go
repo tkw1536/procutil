@@ -1,8 +1,6 @@
 package lowlevel
 
 import (
-	"os"
-
 	mobyterm "github.com/moby/term"
 )
 
@@ -10,6 +8,6 @@ import (
 type FileDescriptor = uintptr
 
 // GetFdInfo returns information about the terminal referred to by file.
-func GetFdInfo(file *os.File) (fd FileDescriptor, isTerminal bool) {
+func GetFdInfo(file interface{}) (fd FileDescriptor, isTerminal bool) {
 	return mobyterm.GetFdInfo(file)
 }

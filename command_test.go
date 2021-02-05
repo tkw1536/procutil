@@ -10,9 +10,9 @@ import (
 	"github.com/tkw1536/procutil/term"
 )
 
-// TestProcess is a process used for testing.
+// testProcess is a process used for testing.
 // It plainly records all calls to it.
-type TestProcess struct {
+type testProcess struct {
 	Out string          // output for out
 	Err string          // output for stderr
 	in  closeableBuffer // buffer to read stdin from
@@ -24,18 +24,18 @@ type TestProcess struct {
 
 	ExitCode int // ExitCode to return
 
-	term *term.Terminal
+	pty, tty term.Terminal
 
 	InitCalled    bool
 	StopCalled    bool
 	CleanupCalled bool
 }
 
-type closeable struct {
+type testProcessClosable struct {
 	c chan struct{}
 }
 
-func (c closeable) Close() error {
+func (c testProcessClosable) Close() error {
 	if c.c != nil {
 		close(c.c)
 	}
@@ -44,19 +44,19 @@ func (c closeable) Close() error {
 
 type closeableBuffer struct {
 	*bytes.Buffer
-	closeable
+	testProcessClosable
 }
 
 type closeableReader struct {
 	*strings.Reader
-	closeable
+	testProcessClosable
 }
 
-func (tp *TestProcess) String() string {
+func (tp *testProcess) String() string {
 	return "TestProcess"
 }
 
-func (tp *TestProcess) Init(ctx context.Context, isPty bool) error {
+func (tp *testProcess) Init(ctx context.Context, isPty bool) error {
 	tp.InitCalled = true
 
 	tp.outChan = make(chan struct{})
@@ -66,49 +66,44 @@ func (tp *TestProcess) Init(ctx context.Context, isPty bool) error {
 	return nil
 }
 
-func (tp *TestProcess) Stdout() (io.ReadCloser, error) {
+func (tp *testProcess) Stdout() (io.ReadCloser, error) {
 	return &closeableReader{
-		Reader:    strings.NewReader(tp.Out),
-		closeable: closeable{tp.outChan},
+		Reader:              strings.NewReader(tp.Out),
+		testProcessClosable: testProcessClosable{tp.outChan},
 	}, nil
 }
 
-func (tp *TestProcess) Stderr() (io.ReadCloser, error) {
+func (tp *testProcess) Stderr() (io.ReadCloser, error) {
 
 	return &closeableReader{
-		Reader:    strings.NewReader(tp.Err),
-		closeable: closeable{tp.errChan},
+		Reader:              strings.NewReader(tp.Err),
+		testProcessClosable: testProcessClosable{tp.errChan},
 	}, nil
 }
 
-func (tp *TestProcess) Stdin() (io.WriteCloser, error) {
+func (tp *testProcess) Stdin() (io.WriteCloser, error) {
 
 	tp.in = closeableBuffer{
-		Buffer:    new(bytes.Buffer),
-		closeable: closeable{tp.inChan},
+		Buffer:              new(bytes.Buffer),
+		testProcessClosable: testProcessClosable{tp.inChan},
 	}
 	return &tp.in, nil
 }
 
-func (tp *TestProcess) Start(Term string, resizeChan <-chan term.WindowSize, isPty bool) (*term.Terminal, error) {
+func (tp *testProcess) Start(Term string, resizeChan <-chan term.WindowSize, isPty bool) (term.Terminal, error) {
 	if isPty == true {
-		pty, _, err := term.OpenTerminal()
-		tp.term = pty
-		if err != nil {
-			panic(err)
-		}
-		return pty, nil
+		panic("not supported")
 	}
 
 	return nil, nil
 }
 
-func (tp *TestProcess) Stop() error {
+func (tp *testProcess) Stop() error {
 	tp.StopCalled = true
 	return nil
 }
 
-func (tp *TestProcess) Wait() (int, error) {
+func (tp *testProcess) Wait() (int, error) {
 	<-tp.inChan
 	<-tp.outChan
 	<-tp.errChan
@@ -116,13 +111,16 @@ func (tp *TestProcess) Wait() (int, error) {
 	return tp.ExitCode, nil
 }
 
-func (tp *TestProcess) Cleanup() error {
+func (tp *testProcess) Cleanup() error {
 	tp.CleanupCalled = true
-	tp.term.Close()
+	if tp.pty != nil {
+		tp.pty.Close()
+	}
 	return nil
 }
 
 func TestCommandNoTty(t *testing.T) {
+
 	tests := []struct {
 		name                     string
 		wantOut, wantErr, wantIn string
@@ -167,7 +165,7 @@ func TestCommandNoTty(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// setup test process
-			process := &TestProcess{
+			process := &testProcess{
 				Out:      tt.wantOut,
 				Err:      tt.wantErr,
 				ExitCode: tt.wantCode,

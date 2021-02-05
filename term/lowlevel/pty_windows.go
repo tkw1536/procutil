@@ -7,6 +7,9 @@ import (
 	"os/exec"
 )
 
+// PTYSupport indicates if the current operating system supports OpenPty() and StartOnPty() methods
+const PTYSupport = false // windows isn't supported
+
 // OpenPty opens a new tty and returns the corresponding (tty, pty) file descriptors.
 func OpenPty() (tty, pty *os.File, err error) {
 	return nil, nil, ErrWindowsUnsupported

@@ -3,7 +3,6 @@ package term
 import (
 	"os"
 	"os/exec"
-	"runtime"
 	"testing"
 )
 
@@ -11,8 +10,8 @@ import (
 // We use the 'tty' command to be sure.
 func TestExecTerminal(t *testing.T) {
 
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows not supported")
+	if !PTYSupport {
+		t.Skip("OS not supported")
 	}
 
 	tty, err := exec.LookPath("tty")
@@ -61,8 +60,8 @@ func CheckIfTerminal() {
 // Test that GetStdTerminal() returns valid information about a terminal.
 // We spawn a subprocess, and have that perform the check using its' exit code.
 func TestGetStdTerminal(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Windows not supported")
+	if !PTYSupport {
+		t.Skip("OS not supported")
 	}
 
 	if os.Getenv("BE_STDTERM") == "1" {

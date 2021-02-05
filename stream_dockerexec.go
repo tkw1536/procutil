@@ -3,7 +3,6 @@ package procutil
 import (
 	"context"
 	"io"
-	"os"
 	"strings"
 
 	"github.com/docker/docker/api/types"
@@ -125,7 +124,7 @@ func (des *DockerExecStreamer) Detach(ctx context.Context) error {
 }
 
 // StreamOutput streams output from the remote stream
-func (des *DockerExecStreamer) StreamOutput(ctx context.Context, stdout, stderr *os.File, restoreTerms func(), errChan chan error) {
+func (des *DockerExecStreamer) StreamOutput(ctx context.Context, stdout, stderr io.Writer, restoreTerms func(), errChan chan error) {
 	var err error
 	if stderr == nil {
 		_, err = io.Copy(stdout, des.conn.Reader)
@@ -137,7 +136,7 @@ func (des *DockerExecStreamer) StreamOutput(ctx context.Context, stdout, stderr 
 }
 
 // StreamInput streams input to the remote stream
-func (des *DockerExecStreamer) StreamInput(ctx context.Context, stdin *os.File, restoreTerms func(), doneChan chan struct{}) {
+func (des *DockerExecStreamer) StreamInput(ctx context.Context, stdin io.Reader, restoreTerms func(), doneChan chan struct{}) {
 	io.Copy(des.conn.Conn, stdin)
 	des.conn.CloseWrite()
 	close(doneChan)

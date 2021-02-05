@@ -70,7 +70,7 @@ func (sp *ExecProcess) Stdin() (io.WriteCloser, error) {
 }
 
 // Start starts this process
-func (sp *ExecProcess) Start(Term string, resizeChan <-chan term.WindowSize, isPty bool) (*term.Terminal, error) {
+func (sp *ExecProcess) Start(Term string, resizeChan <-chan term.WindowSize, isPty bool) (term.Terminal, error) {
 	// not a pty => start the process and be done!
 	if !isPty {
 		return nil, sp.cmd.Start()

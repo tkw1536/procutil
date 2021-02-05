@@ -20,7 +20,7 @@ type Command struct {
 	state commandState // the current state of the underlying process.
 
 	isPty bool // did the call to init() set up a tty?
-	pty   *term.Terminal
+	pty   term.Terminal
 
 	waitChan     chan struct{} // closed when waiting is done
 	waitExitCode int           // exit code from wait
@@ -171,11 +171,11 @@ func (e *Command) StartPty(tm io.ReadWriteCloser, TERM string, resizeChan <-chan
 	tc := NewDualCloser(tm)
 	go func() {
 		defer tc.CloseWrite()
-		io.Copy(tm, f.File())
+		io.Copy(tm, f.ReadWriteCloser())
 	}()
 	go func() {
 		defer tc.Close()
-		io.Copy(f.File(), tm)
+		io.Copy(f.ReadWriteCloser(), tm)
 	}()
 
 	return nil
@@ -254,7 +254,9 @@ func (e *Command) Cleanup() error {
 	}
 
 	e.cleanupOnce.Do(func() {
-		e.pty.Close() // close the terminal; this also works if terminal is nil.
+		if e.pty != nil {
+			e.pty.Close()
+		}
 		e.cleanupErr = e.Process.Cleanup()
 	})
 	return e.cleanupErr

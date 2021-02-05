@@ -9,6 +9,9 @@ import (
 	creackpty "github.com/creack/pty"
 )
 
+// PTYSupport indicates if the current operating system supports OpenPty() and StartOnPty() methods
+const PTYSupport = true // platform is supported
+
 // OpenPty opens a new tty and returns the corresponding (tty, pty) file descriptors.
 func OpenPty() (tty, pty *os.File, err error) {
 	return creackpty.Open()

@@ -36,7 +36,7 @@ type Process interface {
 	// when isPty is true, resizeChan is guaranteed to not be nil.
 	//
 	// The returned terminal, if any, should be closed by the caller and does not need to be manually cleaned up.
-	Start(Term string, resizeChan <-chan term.WindowSize, isPty bool) (*term.Terminal, error)
+	Start(Term string, resizeChan <-chan term.WindowSize, isPty bool) (term.Terminal, error)
 
 	// Stop is used to stop a process that is betweeen the start and wait phases.
 	Stop() error

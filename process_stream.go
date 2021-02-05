@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"runtime"
 	"sync"
 
@@ -24,7 +23,7 @@ type StreamingProcess struct {
 	stdin          io.WriteCloser
 
 	// internal streams
-	stdoutTerm, stderrTerm, stdinTerm, ptyTerm *term.Terminal
+	stdoutTerm, stderrTerm, stdinTerm, ptyTerm term.Terminal
 
 	// for result handling
 	outputErrChan chan error
@@ -46,8 +45,8 @@ type Streamer interface {
 
 	Init(ctx context.Context, Term string, isPty bool) error // init initializes this streamer
 
-	StreamOutput(ctx context.Context, stdout, stderr *os.File, restoreTerms func(), errChan chan error) // stream output streams output to stdout and stderr
-	StreamInput(ctx context.Context, stdin *os.File, restoreTerms func(), doneChan chan struct{})       // stream input streams input from stdin
+	StreamOutput(ctx context.Context, stdout, stderr io.Writer, restoreTerms func(), errChan chan error) // stream output streams output to stdout and stderr
+	StreamInput(ctx context.Context, stdin io.Reader, restoreTerms func(), doneChan chan struct{})       // stream input streams input from stdin
 
 	Attach(ctx context.Context, isPty bool) error             // attach attaches to this stream
 	ResizeTo(ctx context.Context, size term.WindowSize) error // resize resizes the remote stream
@@ -106,11 +105,11 @@ func (sp *StreamingProcess) initTerm() error {
 	sp.ptyTerm = pty
 
 	// standard output is the tty
-	sp.stdout = tty.File()
+	sp.stdout = tty.ReadWriteCloser()
 	sp.stdoutTerm = tty
 
 	// standard input is the tty
-	sp.stdin = tty.File()
+	sp.stdin = tty.ReadWriteCloser()
 	sp.stdinTerm = tty
 
 	return nil
@@ -156,14 +155,14 @@ func (sp *StreamingProcess) restoreTerminals() {
 		sp.stdinTerm.RestoreOutput()
 
 		// this check has been adapted from upstream; for some reason they hang on specific platforms
-		if in := sp.stdinTerm.File(); in != nil && runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
+		if in := sp.stdinTerm.ReadWriteCloser(); in != nil && runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
 			in.Close()
 		}
 	})
 }
 
 // Start starts this process
-func (sp *StreamingProcess) Start(Term string, resizeChan <-chan term.WindowSize, isPty bool) (*term.Terminal, error) {
+func (sp *StreamingProcess) Start(Term string, resizeChan <-chan term.WindowSize, isPty bool) (term.Terminal, error) {
 	if err := sp.Streamer.Init(sp.ctx, Term, isPty); err != nil {
 		return nil, err
 	}
@@ -206,8 +205,8 @@ func (sp *StreamingProcess) execAndStream(isPty bool) error {
 	sp.inputDoneChan = make(chan struct{})
 
 	// stream input and ouput
-	go sp.Streamer.StreamOutput(sp.ctx, sp.stdoutTerm.File(), sp.stderrTerm.File(), sp.restoreTerminals, sp.outputErrChan)
-	go sp.Streamer.StreamInput(sp.ctx, sp.stdinTerm.File(), sp.restoreTerminals, sp.inputDoneChan)
+	go sp.Streamer.StreamOutput(sp.ctx, sp.stdoutTerm.ReadWriteCloser(), sp.stderrTerm.ReadWriteCloser(), sp.restoreTerminals, sp.outputErrChan)
+	go sp.Streamer.StreamInput(sp.ctx, sp.stdinTerm.ReadWriteCloser(), sp.restoreTerminals, sp.inputDoneChan)
 
 	return nil
 }
